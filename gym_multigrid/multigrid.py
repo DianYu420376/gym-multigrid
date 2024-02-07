@@ -357,6 +357,9 @@ class Ball(WorldObj):
     def render(self, img):
         fill_coords(img, point_in_circle(0.5, 0.5, 0.31), COLORS[self.color])
 
+    #def can_overlap(self):
+    #    return True
+
 
 class Box(WorldObj):
     def __init__(self, world, color, contains=None):
@@ -574,11 +577,13 @@ class Grid:
     def set(self, i, j, v):
         assert i >= 0 and i < self.width
         assert j >= 0 and j < self.height
-        self.grid[j * self.width + i] = v
+        self.grid[j * self.width + i] = [v]
 
     def get(self, i, j):
         assert i >= 0 and i < self.width
         assert j >= 0 and j < self.height
+        if self.grid[j * self.width + i]:
+            return self.grid[j * self.width + i][0]
         return self.grid[j * self.width + i]
 
     def horz_wall(self, world, x, y, length=None, obj_type=Wall):
@@ -951,12 +956,12 @@ class MultiGridEnv(gym.Env):
         # Initialize the state
         self.reset()
 
-    def reset(self):
+    def reset(self, pos_lst = None):
 
         # Generate a new random grid at the start of each episode
         # To keep the same grid for each episode, call env.seed() with
         # the same seed before calling env.reset()
-        self._gen_grid(self.width, self.height)
+        self._gen_grid(self.width, self.height, pos_lst=pos_lst)
 
         # These fields should be defined by _gen_grid
         for a in self.agents:
@@ -1072,6 +1077,9 @@ class MultiGridEnv(gym.Env):
         """
 
         return 1 - 0.9 * (self.step_count / self.max_steps)
+
+    def _calc_reward(self):
+        pass # Need to specify in subclass
 
     def _rand_int(self, low, high):
         """
@@ -1248,7 +1256,7 @@ class MultiGridEnv(gym.Env):
 
         order = np.random.permutation(len(actions))
 
-        rewards = np.zeros(len(actions))
+        #rewards = np.zeros(len(actions))
         done = False
 
         for i in order:
@@ -1274,37 +1282,56 @@ class MultiGridEnv(gym.Env):
 
             # Move forward
             elif actions[i] == self.actions.forward:
+                # agent_i_pos = self.agents[i].pos
+                # cur_cell = self.grid.get(*agent_i_pos)
+                # if fwd_cell is not None:
+                #     if fwd_cell.type == 'ball':
+                #         #done = True
+                #         self._reward(i, rewards, 1)
+                #     elif fwd_cell.type == 'switch':
+                #         self._handle_switch(i, rewards, fwd_pos, fwd_cell)
+                # if fwd_cell is None:
+                #     self.grid.set(*fwd_pos, self.agents[i])
+                #
+                # self.agents[i].pos = fwd_pos
+                # if cur_cell != 'ball':
+                #     self.grid.set(*agent_i_pos, None)
+                cur_pos = self.agents[i].pos.copy()
                 if fwd_cell is not None:
-                    if fwd_cell.type == 'goal':
-                        done = True
-                        self._reward(i, rewards, 1)
+                    if fwd_cell.type == 'ball':
+                        #done = True
+                        #self._reward(i, rewards, 1)
+                        #self.grid.set(*self.agents[i].pos, None)
+                        self.agents[i].pos = fwd_pos
                     elif fwd_cell.type == 'switch':
                         self._handle_switch(i, rewards, fwd_pos, fwd_cell)
-                elif fwd_cell is None or fwd_cell.can_overlap():
-                    self.grid.set(*fwd_pos, self.agents[i])
-                    self.grid.set(*self.agents[i].pos, None)
+                elif fwd_cell is None: #or fwd_cell.can_overlap():
+                    #self.grid.set(*fwd_pos, self.agents[i])
+                    #self.grid.set(*self.agents[i].pos, None)
                     self.agents[i].pos = fwd_pos
-                self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
-
-            elif 'build' in self.actions.available and actions[i]==self.actions.build:
-                self._handle_build(i, rewards, fwd_pos, fwd_cell)
-
-            # Pick up an object
-            elif actions[i] == self.actions.pickup:
-                self._handle_pickup(i, rewards, fwd_pos, fwd_cell)
-
-            # Drop an object
-            elif actions[i] == self.actions.drop:
-                self._handle_drop(i, rewards, fwd_pos, fwd_cell)
-
-            # Toggle/activate an object
-            elif actions[i] == self.actions.toggle:
-                if fwd_cell:
-                    fwd_cell.toggle(self, fwd_pos)
-
-            # Done action (not used by default)
-            elif actions[i] == self.actions.done:
-                pass
+                if self.grid.get(*cur_pos) and self.grid.get(*cur_pos).type == 'agent':
+                    self.grid.set(*cur_pos, None)
+            #     self._handle_special_moves(i, rewards, fwd_pos, fwd_cell)
+            #
+            # elif 'build' in self.actions.available and actions[i]==self.actions.build:
+            #     self._handle_build(i, rewards, fwd_pos, fwd_cell)
+            #
+            # # Pick up an object
+            # elif actions[i] == self.actions.pickup:
+            #     self._handle_pickup(i, rewards, fwd_pos, fwd_cell)
+            #
+            # # Drop an object
+            # elif actions[i] == self.actions.drop:
+            #     self._handle_drop(i, rewards, fwd_pos, fwd_cell)
+            #
+            # # Toggle/activate an object
+            # elif actions[i] == self.actions.toggle:
+            #     if fwd_cell:
+            #         fwd_cell.toggle(self, fwd_pos)
+            #
+            # # Done action (not used by default)
+            # elif actions[i] == self.actions.done:
+            #     pass
 
             else:
                 assert False, "unknown action"
@@ -1318,6 +1345,9 @@ class MultiGridEnv(gym.Env):
             obs = [self.grid.encode_for_agents(self.agents[i].pos) for i in range(len(actions))]
 
         obs=[self.objects.normalize_obs*ob for ob in obs]
+
+        rewards = self._calc_reward(mode = self.reward_mode)
+        done = False
 
         return obs, rewards, done, {}
 

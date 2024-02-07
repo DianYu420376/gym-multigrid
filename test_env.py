@@ -2,9 +2,10 @@ import gym
 import time
 from gym.envs.registration import register
 import argparse
+import numpy as np
 
 parser = argparse.ArgumentParser(description=None)
-parser.add_argument('-e', '--env', default='soccer', type=str)
+parser.add_argument('-e', '--env', default='covering', type=str)
 
 args = parser.parse_args()
 
@@ -19,22 +20,27 @@ def main():
 
     else:
         register(
-            id='multigrid-collect-v0',
-            entry_point='gym_multigrid.envs:CollectGame4HEnv10x10N2',
+            id='multigrid-covering-v0',
+            entry_point='gym_multigrid.envs:CoveringGame4HEnv10x10N3',
         )
-        env = gym.make('multigrid-collect-v0')
+        env = gym.make('multigrid-covering-v0')
 
-    _ = env.reset()
+    pos_lst = [np.array([1, 1]), np.array([7, 7]),
+               np.array([1, 8]), np.array([3, 1]),
+               np.array([1, 1]), np.array([3, 1]), np.array([5, 5])]
+    _ = env.reset(pos_lst)
 
     nb_agents = len(env.agents)
-
+    #print(env.agent_view_size)
     while True:
         env.render(mode='human', highlight=True)
         time.sleep(0.1)
 
-        ac = [env.action_space.sample() for _ in range(nb_agents)]
+        #ac = [env.action_space.sample() for _ in range(nb_agents)]
+        ac = [0 for _ in range(nb_agents)]
 
-        obs, _, done, _ = env.step(ac)
+        obs, rewards, done, _ = env.step(ac)
+        print(rewards)
 
         if done:
             break
